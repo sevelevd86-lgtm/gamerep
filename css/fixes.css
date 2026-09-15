@@ -1,0 +1,8 @@
+/* GAMEReP runtime fixes */
+.hidden,.screen.modal-screen.hidden,#nameScreen.hidden,#pauseScreen.hidden,#panelScreen.hidden,#overlay.hidden{display:none!important}
+.screen.modal-screen.active{display:flex!important;align-items:center;justify-content:center}
+#overlay.hidden{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
+#bossHud{position:absolute;top:20px;left:50%;transform:translateX(-50%);text-align:center;z-index:5}
+#bossHud #bossName{font-weight:1000;letter-spacing:4px;font-size:15px}
+#bossHud #bossPhase{font-size:10px;opacity:.7;margin-top:4px}
+#interactionHint{position:absolute;bottom:12%;left:50%;transform:translateX(-50%);background:#0a0d15dd;border:1px solid #fff2;padding:10px 15px;border-radius:10px;pointer-events:none;z-index:20}
