@@ -1,0 +1,1 @@
+export const LINKS={MET200:"PASTE_LINK_HERE"};export const CFG={SAVE_KEY:"gamerep_save_v1",WIDTH:1600,HEIGHT:900,FPS:60,START_MONEY:0,START_HP:3,START_MUSIC:100};export const COLORS={bg:"#090c14",player:"#8cecff",accent:"#b25cff",danger:"#ff496d",gold:"#ffd166"};
