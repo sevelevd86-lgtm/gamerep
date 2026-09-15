@@ -1,8 +1,0 @@
-export const EQUIPMENT={
-mic:{old:{name:"Старый микрофон",price:0,quality:0,income:0,pop:0},budget:{name:"Budget Mic",price:2500,quality:10,income:3,pop:1},studio:{name:"Studio Mic",price:10000,quality:20,income:8,pop:3},pro:{name:"Pro Mic",price:35000,quality:35,income:15,pop:6},legend:{name:"Legend Mic",price:100000,quality:55,income:25,pop:12}},
-headphones:{old:{name:"Старые наушники",price:500,quality:0},gaming:{name:"Gaming",price:3000,quality:8},studio:{name:"Studio",price:12000,quality:18},pro:{name:"Pro",price:40000,quality:30}},
-pc:{old:{name:"Старый ноутбук",price:0,speed:0,stream:0,income:0},budget:{name:"Бюджетный ноутбук",price:10000,speed:15,stream:5,income:4},computer:{name:"Компьютер",price:35000,speed:25,stream:15,income:8},studio:{name:"Studio PC",price:80000,speed:40,stream:25,income:15},monster:{name:"Monster PC",price:200000,speed:65,stream:40,income:30}},
-camera:{webcam:{name:"Старая webcam",price:5000,stream:10},hd:{name:"HD webcam",price:15000,stream:22},pro:{name:"Pro camera",price:50000,stream:45}}
-};
-export const CLOTHES=[["hoodie","BLACK HOODIE",4000,10,2],["tee","NEON TEE",1800,5,1],["pants","STREET PANTS",3000,6,1],["cap","NIGHT CAP",2200,5,2],["glasses","PIXEL GLASSES",5000,8,3],["chain","SILVER CHAIN",12000,15,5],["jacket","CITY JACKET",18000,18,6],["sneakers","NIGHT SNEAKERS",9000,10,4]];
-export function equipmentStats(s){let q=0,income=0,pop=0;for(const [type,id] of Object.entries(s.equipment)){if(EQUIPMENT[type]?.[id]){const e=EQUIPMENT[type][id];q+=e.quality||0;income+=e.income||0;pop+=e.pop||0}}for(const c of s.equippedClothes){const x=CLOTHES.find(v=>v[0]===c);if(x){pop+=x[3];income+=x[4]}}return{quality:q,income,pop}}
