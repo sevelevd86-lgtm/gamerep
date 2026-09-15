@@ -1,0 +1,76 @@
+import {Player} from './player.js';
+import {Particles} from './particles.js';
+import {Projectile} from './combat.js';
+import {LEVELS,drawBackground} from './levels.js';
+import {createBoss} from './bosses.js';
+import {Save} from './save.js';
+import {EQUIPMENT,CLOTHES} from './economy.js';
+import {createTrack,stream} from './music.js';
+import {shopHTML} from './shop.js';
+import {inventoryHTML} from './inventory.js';
+import {apartmentHTML} from './apartment.js';
+import {streamHTML} from './streaming.js';
+import {DISCS} from './discs.js';
+import {DIALOGUES} from './dialogue.js';
+import {toast} from './ui.js';
+const $=id=>document.getElementById(id);
+const OBJECT_LABELS={computer:'E — создать бит (+25 ₽)',shop:'E — магазин',friend:'E — поговорить',alley:'E — обыскать переулок',bench:'E — передохнуть',studio:'E — записать трек',exit:'E — выйти',pvz:'E — REP ПВЗ',counter:'E — касса'};
+export class Game{
+ constructor(canvas,state){
+  this.canvas=canvas;this.ctx=canvas.getContext('2d');this.s=state;this.keys={};this.projectiles=[];this.particles=new Particles();this.camera=0;this.level=LEVELS.city;this.player=new Player(150,628,state.character||'robot');this.player.hp=state.health;this.player.maxHp=state.maxHealth;this.player.music=state.musicEnergy;this.paused=false;this.boss=null;this.dialog=null;this.running=false;this.last=performance.now();this.pvzTimer=0;this.bossStarting=false;
+  this.onKeyDown=e=>{const k=e.key.toLowerCase();if(['a','d','w','e',' ','arrowleft','arrowright','arrowup','shift'].includes(k))e.preventDefault();this.keys[k]=true;if(k==='escape')this.pause()};
+  this.onKeyUp=e=>this.keys[e.key.toLowerCase()]=false;this.onResize=()=>this.resize();this.onCanvasClick=e=>this.canvasClick(e);
+  window.addEventListener('keydown',this.onKeyDown,{passive:false});window.addEventListener('keyup',this.onKeyUp);window.addEventListener('resize',this.onResize);canvas.addEventListener('click',this.onCanvasClick);this.resize()
+ }
+ destroy(){this.running=false;cancelAnimationFrame(this.frame);window.removeEventListener('keydown',this.onKeyDown);window.removeEventListener('keyup',this.onKeyUp);window.removeEventListener('resize',this.onResize);this.canvas.removeEventListener('click',this.onCanvasClick)}
+ resize(){const d=devicePixelRatio||1;this.canvas.width=innerWidth*d;this.canvas.height=innerHeight*d;this.ctx.setTransform(d,0,0,d,0,0);this.W=innerWidth;this.H=innerHeight}
+ start(){if(this.running)return;this.running=true;this.last=performance.now();this.frame=requestAnimationFrame(t=>this.loop(t));if(!this.s.story.prologue){this.s.story.prologue=true;this.startDialogue(DIALOGUES.prologue,()=>{this.toast('Выйди в город и найди друга');this.autosave()})}}
+ loop(t){if(!this.running)return;const dt=Math.min(.033,(t-this.last)/1000);this.last=t;if(!this.paused)this.update(dt);this.draw();this.frame=requestAnimationFrame(x=>this.loop(x))}
+ update(dt){
+  this.player.update(dt,this.keys,this.level);this.camera=Math.max(0,Math.min(this.level.width-this.W,this.player.x-this.W*.4));
+  this.projectiles.forEach(p=>p.update(dt));this.projectiles=this.projectiles.filter(p=>p.life>0&&p.x>-100&&p.x<this.level.width+100);
+  if(this.boss){this.boss.update(dt,this);for(const p of this.projectiles){if(p.type==='music'&&p.x>this.boss.x&&p.x<this.boss.x+this.boss.w&&p.y>this.boss.y&&p.y<this.boss.y+this.boss.h){p.life=0;this.boss.takeDamage(p.damage,this)}}for(const p of this.projectiles){if(p.type==='danger'&&this.player.x+this.player.w>p.x-p.r&&this.player.x<p.x+p.r&&this.player.y+this.player.h>p.y-p.r&&this.player.y<p.y+p.r&&this.player.inv<=0){this.damage(1);p.life=0}}}
+  if(this.level===LEVELS.pvz||this.level===LEVELS.basement){this.pvzTimer+=dt;if(this.pvzTimer>=4){this.pvzTimer-=4;this.collectPvzIncome()}}
+  this.particles.update(dt);this.player.music=Math.min(100,this.player.music+10*dt);this.updateHint();this.syncHUD();this.checkBossUnlock()
+ }
+ draw(){const c=this.ctx;c.clearRect(0,0,this.W,this.H);drawBackground(c,this.level,this.W,this.H,this.camera);c.save();c.translate(-this.camera,0);for(const p of this.level.platforms){c.fillStyle='#263142';c.fillRect(p.x,p.y,p.w,p.h);c.fillStyle='#101722';c.fillRect(p.x,p.y,p.w,7);for(let x=p.x;x<p.x+p.w;x+=32){c.fillStyle='#344255';c.fillRect(x,p.y+10,2,25)}}for(const o of this.level.objects)this.drawObject(c,o);this.projectiles.forEach(p=>p.draw(c));this.player.draw(c);if(this.boss)this.boss.draw(c);this.particles.draw(c);c.restore()}
+ drawObject(c,o){const x=o.x,y=o.y;const base=y-8;c.save();c.imageSmoothingEnabled=false;
+  if(o.type==='computer'){c.fillStyle='#10131b';c.fillRect(x-46,base-62,92,58);c.fillStyle='#27344b';c.fillRect(x-40,base-56,80,44);c.fillStyle='#5de1ff';c.fillRect(x-32,base-49,64,27);c.fillStyle='#1b202b';c.fillRect(x-10,base-4,20,7);c.fillRect(x-42,base+3,84,8);}
+  if(o.type==='mic'){c.fillStyle='#222936';c.fillRect(x-8,base-55,16,42);c.fillStyle='#7d8da8';c.beginPath();c.arc(x,base-62,15,0,Math.PI*2);c.fill();c.fillStyle='#111827';c.fillRect(x-28,base-8,56,7)}
+  if(o.type==='shop'){c.fillStyle='#4b2748';c.fillRect(x-70,base-92,140,92);c.fillStyle='#e75d8a';c.fillRect(x-78,base-105,156,24);c.fillStyle='#f7d36d';c.font='bold 16px monospace';c.textAlign='center';c.fillText('REP SHOP',x,base-87);c.fillStyle='#152033';c.fillRect(x-52,base-60,40,60);c.fillRect(x+12,base-60,40,60)}
+  if(o.type==='studio'){c.fillStyle='#161a27';c.fillRect(x-65,base-75,130,75);c.fillStyle='#6b3fa0';c.fillRect(x-55,base-64,110,55);c.fillStyle='#d7b6ff';c.fillRect(x-42,base-52,84,3);c.fillRect(x-42,base-40,84,3)}
+  if(o.type==='friend'){c.fillStyle='#171b27';c.fillRect(x-22,base-48,44,48);c.fillStyle='#e7b899';c.beginPath();c.arc(x,base-63,18,0,Math.PI*2);c.fill();c.fillStyle='#3c2234';c.fillRect(x-19,base-81,38,12);c.fillStyle='#62d9b0';c.fillRect(x-16,base-36,32,8)}
+  if(o.type==='bench'){c.fillStyle='#714b35';c.fillRect(x-55,base-18,110,12);c.fillRect(x-45,base-6,10,22);c.fillRect(x+35,base-6,10,22)}
+  if(o.type==='alley'){c.fillStyle='#3b4353';c.fillRect(x-38,base-38,76,38);c.fillStyle='#a5b4c7';c.fillRect(x-25,base-28,50,5);c.fillStyle='#d8e4ff';c.font='22px monospace';c.textAlign='center';c.fillText('💿',x,base-42)}
+  if(o.type==='pvz'||o.type==='counter'){c.fillStyle='#102f2c';c.fillRect(x-95,base-90,190,90);c.fillStyle='#37d0a4';c.fillRect(x-105,base-104,210,22);c.fillStyle='#07151a';c.font='bold 16px monospace';c.textAlign='center';c.fillText('REP ПВЗ',x,base-88);c.fillStyle='#263b4e';c.fillRect(x-70,base-58,140,42);c.fillStyle='#8de8cf';c.fillRect(x-55,base-48,110,8)}
+  if(o.type==='exit'){c.fillStyle='#2c3344';c.fillRect(x-34,base-92,68,92);c.fillStyle='#6c79a0';c.fillRect(x-27,base-84,54,84);c.fillStyle='#f7d36d';c.beginPath();c.arc(x+15,base-42,4,0,7);c.fill();c.fillStyle='#fff';c.font='bold 10px monospace';c.textAlign='center';c.fillText(o.label||'ВЫХОД',x,base-110)}
+  c.restore()}
+ syncHUD(){$('moneyHud').textContent='₽ '+this.s.money.toLocaleString('ru-RU');$('chapterHud').textContent='ГЛАВА '+this.s.currentChapter;$('musicFill').style.width=this.player.music+'%';$('hearts').innerHTML=Array.from({length:this.player.maxHp},(_,i)=>`<span class="heart ${i>=this.player.hp?'empty-heart':''}">${i<this.player.hp?'❤️':'🖤'}</span>`).join('');$('bossHud').classList.toggle('hidden',!this.boss);if(this.boss){$('bossFill').style.width=this.boss.hp/this.boss.maxHp*100+'%';$('bossName').textContent='BOSS — '+this.boss.name;$('bossPhase').textContent='PHASE '+this.boss.phase}}
+ nearObject(){return this.level.objects.find(o=>Math.abs((o.x+0)-this.player.x)<100&&Math.abs(o.y-(this.player.y+this.player.h))<125)}
+ updateHint(){const o=this.nearObject();$('interactionHint').textContent=o?OBJECT_LABELS[o.type]||'E — взаимодействовать':''}
+ canvasClick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left+this.camera,y=e.clientY-r.top;if(this.level.objects.some(o=>o.type==='computer'&&Math.abs(o.x-x)<80&&Math.abs(o.y-y)<100))this.clickComputer()}
+ interact(){const o=this.nearObject();if(!o)return;const actions={computer:()=>this.clickComputer(),shop:()=>this.openShop(),alley:()=>this.findDisc(),bench:()=>this.toast('Иногда пауза тоже часть трека.'),friend:()=>this.meetFriend(),studio:()=>this.publish(),pvz:()=>this.enterLocation('pvz'),counter:()=>this.toast(`REP ПВЗ • ${this.s.tracks.length} треков × 25 ₽ каждые 4 сек`),exit:()=>this.enterLocation(o.target)};return actions[o.type]?.()}
+ enterLocation(id){const target=LEVELS[id]||LEVELS.city;this.level=target;this.boss=null;this.projectiles=[];this.pvzTimer=0;this.player.x=id==='home'?110:id==='city'?110:110;this.player.y=628;this.camera=0;this.toast('ЛОКАЦИЯ: '+target.name);this.autosave()}
+ startDialogue(lines,onEnd){this.dialog={lines,index:0,onEnd};this.paused=true;this.renderDialogue()}
+ renderDialogue(){const [speaker,line]=this.dialog.lines[this.dialog.index];$('panelContent').innerHTML=`<div class="small-label">${speaker}</div><h1>${speaker}</h1><p>${line.replace('{name}',this.s.playerName)}</p><button data-dialog-next>${this.dialog.index===this.dialog.lines.length-1?'ПРОДОЛЖИТЬ':'ДАЛЕЕ'}</button>`;$('panelScreen').classList.remove('hidden')}
+ nextDialogue(){if(!this.dialog)return;if(++this.dialog.index<this.dialog.lines.length)return this.renderDialogue();const done=this.dialog.onEnd;this.dialog=null;$('panelScreen').classList.add('hidden');this.paused=false;done?.()}
+ meetFriend(){if(this.s.story.friendMet)return this.enterLocation('pvz');this.startDialogue(DIALOGUES.friend,()=>{this.s.story.friendMet=true;this.s.story.basement=true;if(!this.s.unlockedLocations.includes('pvz'))this.s.unlockedLocations.push('pvz');this.enterLocation('pvz');this.toast('Друг ушёл в REP ПВЗ. Здесь треки приносят деньги автоматически.');this.autosave()})}
+ collectPvzIncome(){if(!this.s.tracks.length)return;const income=this.s.tracks.length*25;this.s.money+=income;this.toast(`REP ПВЗ +${income} ₽ • ${this.s.tracks.length} трек(ов)`);this.autosave()}
+ clickComputer(){this.s.money+=25;this.particles.burst(this.player.x+20,this.player.y,'#ffd166',8,3);this.toast('+25 ₽ • бит готов');this.autosave()}
+ attack(music=false){if(this.player.attackCd>0)return;const tracks=this.s.tracks.length;if(music){if(this.player.music<20)return this.toast('Недостаточно MUSIC');this.player.music-=20;const damage=11+tracks*4;this.projectiles.push(new Projectile(this.player.x+(this.player.facing>0?45:-10),this.player.y+30,this.player.facing*12,0,55,'music',damage));this.player.attackCd=.22;this.particles.burst(this.player.x+this.player.facing*35,this.player.y+30,'#5de1ff',7,4);this.toast(`MUSIC HIT • ${damage} DMG`)}else{this.player.attackCd=.3;const damage=5+tracks*2;for(const p of this.projectiles)if(p.type==='danger'&&Math.abs(p.x-this.player.x)<90)p.life=0;if(this.boss&&Math.abs((this.boss.x+this.boss.w/2)-(this.player.x+this.player.w/2))<105){this.boss.takeDamage(damage,this)}this.particles.burst(this.player.x+this.player.facing*25,this.player.y+30,'#ffffff',5,2);this.toast(`ATTACK • ${damage} POWER`)}}
+ special(){const tracks=this.s.tracks.length;if(this.player.music<45)return this.toast('Нужно 45 MUSIC');this.player.music-=45;const damage=24+tracks*8;this.projectiles.push(new Projectile(this.player.x,this.player.y,this.player.facing*15,-1,80,'music',damage));this.toast(`BEAT DROP! • ${damage} DMG`)}
+ damage(n){if(this.player.inv>0)return;this.player.hp-=n;this.player.inv=.9;this.player.vx=-this.player.facing*6;this.particles.burst(this.player.x,this.player.y+30,'#ff496d',14,5);if(this.player.hp<=0)this.lose()}
+ warning(r){this.particles.burst(r.x+r.w/2,r.y,'#ff496d',20,2)}
+ lose(){this.paused=true;this.s.health=3;this.s.musicEnergy=100;this.player.hp=3;this.player.music=100;$('panelContent').innerHTML='<h1>ВЫ ПРОИГРАЛИ</h1><p>Попробуй ещё раз. Сила атак зависит от количества записанных треков.</p><button data-retry-boss>ПОПРОБОВАТЬ ЕЩЁ РАЗ</button>';$('panelScreen').classList.remove('hidden')}
+ bossDefeated(b){if(!this.s.bossesDefeated.includes('mom'))this.s.bossesDefeated.push('mom');this.boss=null;this.paused=true;this.s.health=3;$('panelContent').innerHTML=`<h1>BOSS DEFEATED</h1><p>${b.name} повержен. Путь продолжается.</p><button data-close-panel>ПРОДОЛЖИТЬ</button>`;$('panelScreen').classList.remove('hidden');this.autosave();window.refreshQuests?.()}
+ startMom(){this.level=LEVELS.boss;this.player.x=200;this.player.y=628;this.player.hp=this.player.maxHp;this.player.music=100;this.boss=createBoss('mom');this.toast('BOSS — МАМА. Используй музыку и уклонения!')}
+ checkBossUnlock(){if(this.boss||this.bossStarting||this.s.bossesDefeated.includes('mom'))return;const complete=this.s.tracks.length>=1&&this.s.money>=2500&&this.s.equipment.mic!=='old';if(!complete)return;this.bossStarting=true;this.s.story.momUnlocked=true;window.refreshQuests?.();this.startDialogue(DIALOGUES.momBoss,()=>{this.bossStarting=false;this.startMom();this.autosave()})}
+ openShop(){this.paused=true;$('panelContent').innerHTML=shopHTML(this.s);$('panelScreen').classList.remove('hidden')};openInventory(){this.paused=true;$('panelContent').innerHTML=inventoryHTML(this.s);$('panelScreen').classList.remove('hidden')};openApartment(){this.paused=true;$('panelContent').innerHTML=apartmentHTML(this.s);$('panelScreen').classList.remove('hidden')};openStream(){this.paused=true;$('panelContent').innerHTML=streamHTML(this.s);$('panelScreen').classList.remove('hidden')}
+ publish(){const r=createTrack(this.s,'My Track #'+(this.s.tracks.length+1));this.toast(`ТРЕК ГОТОВ • ${r.quality}/100 • +${r.income} ₽ • POWER x${1+this.s.tracks.length*.25}`);this.autosave();window.refreshQuests?.();if(this.s.equipment.mic!=='old'&&this.s.tracks.length===1)this.toast('Первый трек записан. Выполняй остальные квесты!')}
+ doStream(){const r=stream(this.s);if(!r)return this.toast('Нужны камера и компьютер');this.toast(`LIVE • ${r.viewers} зрителей • +${r.income} ₽`);this.autosave();$('panelScreen').classList.add('hidden');this.paused=false}
+ buyEquip(type,id){const item=EQUIPMENT[type]?.[id];if(!item||this.s.money<item.price)return this.toast('Недостаточно денег');this.s.money-=item.price;this.s.equipment[type]=id;this.toast('КУПЛЕНО');this.autosave();window.refreshQuests?.();this.openShop()}
+ buyCloth(id){const c=CLOTHES.find(x=>x[0]===id);if(!c||this.s.clothes.includes(id)||this.s.money<c[2])return;this.s.money-=c[2];this.s.clothes.push(id);this.s.equippedClothes.push(id);this.autosave();this.openShop()}
+ buyFurniture(id){const prices={bed:5000,sofa:8000,tv:12000,desk:3000,speakers:15000,panels:22000,rgb:10000,chair:7000},price=prices[id];if(!price||this.s.furniture.includes(id)||this.s.money<price)return;this.s.money-=price;this.s.furniture.push(id);this.autosave();this.openApartment()}
+ findDisc(){const pool=DISCS.filter(d=>!this.s.discs.some(x=>x.id===d.id));if(!pool.length)return this.toast('Переулок уже пуст.');const d=pool[Math.floor(Math.random()*pool.length)];this.s.discs.push(d);this.toast('💿 НАЙДЕН ДИСК: '+d.name);this.autosave();window.refreshQuests?.()}
+ autosave(){this.s.health=this.player.hp;this.s.musicEnergy=this.player.music;Save.save(this.s)};toast(t){toast(t)};pause(){if(!$('panelScreen').classList.contains('hidden'))return;this.paused=!this.paused;$('pauseScreen').classList.toggle('hidden',!this.paused)}
+}
